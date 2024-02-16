@@ -1,33 +1,93 @@
-import { Client } from 'node-appwrite';
+import { Databases, Client, Functions ,Account} from 'node-appwrite';
+import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
+import sodium from "sodium-native";
+import dotenv from "dotenv";
+dotenv.config();
+ 
 
-// This is your Appwrite function
-// It's executed each time we get a request
+
 export default async ({ req, res, log, error }) => {
-  // Why not try the Appwrite SDK?
-  //
-  // const client = new Client()
-  //    .setEndpoint('https://cloud.appwrite.io/v1')
-  //    .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
-  //    .setKey(process.env.APPWRITE_API_KEY);
+    log("req" + req.body);
+    
+    const cipherText=req.body
 
-  // You can log messages to the console
-  log('Hello, Logs!');
 
-  // If something goes wrong, log an error
-  error('Hello, Errors!');
 
-  // The `req` object contains the request data
-  if (req.method === 'GET') {
-    // Send a response with the res object helpers
-    // `res.send()` dispatches a string back to the client
-    return res.send('Hello, World!');
-  }
+    const decryptedData=decryptObject(
+        cipherText ,
+        Buffer.from(process.env.NONCEHASH, "hex"),
+        Buffer.from(process.env.KEY, "hex")
+      
+      )
 
-  // `res.json()` is a handy helper for sending JSON
-  return res.json({
-    motto: 'Build like a team of hundreds_',
-    learn: 'https://appwrite.io/docs',
-    connect: 'https://appwrite.io/discord',
-    getInspired: 'https://builtwith.appwrite.io',
-  });
+  
+    const documentId_temp = decryptedData.documentId;
+    const databaseId = decryptedData.databaseId;
+    const collectionId_temp = decryptedData.collectionId
+    const commitBucketId=process.env.commit_Bucket_Id
+    const randomDocId = uuidv4(); 
+    try {
+       
+            const externalClient = new Client();
+            externalClient
+            .setEndpoint('https://cloud.appwrite.io/v1')
+            .setKey(process.env.EXTERNAL_API_KEY)
+            .setProject(process.env.EXTERNAL_PROJECT_ID);
+
+
+           
+            const databases = new Databases(externalClient);
+
+            const document = await databases.getDocument(databaseId, collectionId_temp, documentId_temp);
+            const txIdToCheck=document.txId
+            const allDocuments = await databases.listDocuments(databaseId,commitBucketId);
+
+            // Check if txIdToCheck exists in any document's txid field
+            const foundDocument = allDocuments.documents.find(document => document.txId === txIdToCheck);
+
+            if (foundDocument) {
+                log(`Document with txId ${txIdToCheck} already exists in commit bucket.`);
+
+            } else {
+                await databases.createDocument(databaseId, commitBucketId ,randomDocId, {
+                name:document.name,
+                id:document.id,
+                status:"txn verified",
+                txId: txIdToCheck,
+
+                });
+
+                await databases.deleteDocument(databaseId, collectionId_temp, documentId_temp);
+                log(`Document with txId ${txIdToCheck} does not exist in commit bucket.`);
+            }
+            
+            return res.send("triggered");
+       
+
+        } catch (error1) {
+        error('Error accessing document: ' + error1);
+        return res.send("Not added to commit bucket"+error1);
+        }
+            
 };
+
+
+
+const decryptObject = (ciphertextHex, nonceHex, key) => {
+    // Decode hexadecimal strings to buffers
+    const ciphertext = Buffer.from(ciphertextHex, "hex");
+    const nonce = Buffer.from(nonceHex, "hex");
+ 
+    // Decrypt the ciphertext
+    const decrypted = Buffer.alloc(
+      ciphertext.length - sodium.crypto_secretbox_MACBYTES
+    );
+    if (sodium.crypto_secretbox_open_easy(decrypted, ciphertext, nonce, key)) {
+      // Parse the decrypted string back into an object
+      const decryptedObj = JSON.parse(decrypted.toString());
+      return decryptedObj;
+    } else {
+      throw new Error("Decryption failed!");
+    }
+  };
