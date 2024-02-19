@@ -33,8 +33,9 @@ export default async ({ req, res, log, error }) => {
             .setKey(process.env.EXTERNAL_API_KEY)
             .setProject(process.env.EXTERNAL_PROJECT_ID);
             const databases = new Databases(externalClient);
+            let document=null;
             try{
-            const document = await databases.getDocument(databaseId, collectionId_temp, documentId_temp);}
+            document = await databases.getDocument(databaseId, collectionId_temp, documentId_temp);}
             catch(error1)
             {log("this document does not exists in temp bucket");
           return res.send("document does not exists in the temp bucket");}
