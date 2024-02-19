@@ -8,35 +8,29 @@ dotenv.config();
 
 
 export default async ({ req, res, log, error }) => {
-    log("req" + req.body);
+   
     
-    const cipherText=req.body
-
-
-
-    const decryptedData=decryptObject(
+        const cipherText=req.body
+        const decryptedData=decryptObject(
         cipherText ,
         Buffer.from(process.env.NONCEHASH, "hex"),
         Buffer.from(process.env.KEY, "hex")
       
       )
 
-  
+    //retrieve the data from decrypted object
     const documentId_temp = decryptedData.documentId;
     const databaseId = decryptedData.databaseId;
     const collectionId_temp = decryptedData.collectionId
     const commitBucketId=process.env.commit_Bucket_Id
     const randomDocId = uuidv4(); 
     try {
-       
+            // for smart contract client
             const externalClient = new Client();
             externalClient
             .setEndpoint('https://cloud.appwrite.io/v1')
             .setKey(process.env.EXTERNAL_API_KEY)
             .setProject(process.env.EXTERNAL_PROJECT_ID);
-
-
-           
             const databases = new Databases(externalClient);
 
             const document = await databases.getDocument(databaseId, collectionId_temp, documentId_temp);
