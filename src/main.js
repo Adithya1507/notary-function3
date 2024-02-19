@@ -20,6 +20,7 @@ export default async ({ req, res, log, error }) => {
 
     //retrieve the data from decrypted object
     const documentId_temp = decryptedData.documentId;
+    log("documentId_temp"+documentId_temp);
     const databaseId = decryptedData.databaseId;
     const collectionId_temp = decryptedData.collectionId
     const commitBucketId=process.env.commit_Bucket_Id
